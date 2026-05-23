@@ -175,6 +175,7 @@
       <div class="date-num" id="headerDate"></div>
     </div>
   </div>
+  <div id="syncStatus" style="text-align:center;font-size:11px;color:#888;margin-bottom:8px;height:16px"></div>
 
   <!-- Tab content -->
   <div id="tab-today"></div>
@@ -234,6 +235,7 @@ function loadLog() {
 }
 function saveLog() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(log)); } catch {}
+  scheduleSyncAfterChange();
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -939,6 +941,96 @@ function checkInstallHint() {
   if (isIOS && !isStandalone) document.getElementById("installBanner").classList.add("show");
 }
 
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// GITHUB AUTO-SYNC
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const GH_TOKEN = "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";
+const GH_USER = "Malva-12";
+const GH_REPO = "Pizza-Blitz";
+const GH_FILE = "data.json";
+const GH_API = `https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${GH_FILE}`;
+
+let syncTimer = null;
+let lastSyncTime = null;
+let isSyncing = false;
+
+async function githubSync() {
+  if (isSyncing) return;
+  isSyncing = true;
+  showSyncStatus("syncing");
+  try {
+    // Get current file SHA (needed for update)
+    let sha = null;
+    try {
+      const getRes = await fetch(GH_API, {
+        headers: { Authorization: `token ${GH_TOKEN}`, Accept: "application/vnd.github.v3+json" }
+      });
+      if (getRes.ok) {
+        const getJson = await getRes.json();
+        sha = getJson.sha;
+      }
+    } catch(e) {}
+
+    // Upload new data
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(log))));
+    const body = { message: "Auto-sync " + new Date().toISOString(), content };
+    if (sha) body.sha = sha;
+
+    const putRes = await fetch(GH_API, {
+      method: "PUT",
+      headers: { Authorization: `token ${GH_TOKEN}`, Accept: "application/vnd.github.v3+json", "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+
+    if (putRes.ok) {
+      lastSyncTime = new Date();
+      showSyncStatus("ok");
+    } else {
+      showSyncStatus("error");
+    }
+  } catch(e) {
+    showSyncStatus("error");
+  }
+  isSyncing = false;
+}
+
+async function githubLoad() {
+  try {
+    const res = await fetch(GH_API + "?t=" + Date.now(), {
+      headers: { Authorization: `token ${GH_TOKEN}`, Accept: "application/vnd.github.v3+json" }
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const decoded = decodeURIComponent(escape(atob(json.content)));
+      const remoteLog = JSON.parse(decoded);
+      // Merge: remote wins for days not in local
+      let merged = { ...remoteLog, ...log };
+      // If local is empty, use remote entirely
+      if (Object.keys(log).length === 0) merged = remoteLog;
+      log = merged;
+      saveLog();
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
+function scheduleSyncAfterChange() {
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => githubSync(), 60000); // 1 minute after last change
+  showSyncStatus("pending");
+}
+
+function showSyncStatus(status) {
+  const el = document.getElementById("syncStatus");
+  if (!el) return;
+  if (status === "syncing") { el.textContent = "☁️ Syncing..."; el.style.color = "#888"; }
+  else if (status === "ok") { el.textContent = "✅ Gesichert " + new Date().toLocaleTimeString("de-DE", {hour:"2-digit",minute:"2-digit"}); el.style.color = "#4a9eff"; }
+  else if (status === "error") { el.textContent = "⚠️ Sync fehlgeschlagen"; el.style.color = "#f0a500"; }
+  else if (status === "pending") { el.textContent = "🕐 Wird gesichert..."; el.style.color = "#888"; }
+}
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Init
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -946,6 +1038,13 @@ loadLog();
 renderHeader();
 renderToday();
 checkInstallHint();
+// Load from GitHub on startup and merge with local
+githubLoad().then(loaded => {
+  if (loaded) {
+    renderToday();
+    showSyncStatus("ok");
+  }
+});
 </script>
 </body>
 </html>
