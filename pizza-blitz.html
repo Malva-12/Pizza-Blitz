@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Pizza Blitz" />
+  <meta name="theme-color" content="#e8333a" />
+  <title>Pizza Blitz – Arbeitszeiterfassung</title>
+
+  <script>
+    const manifestData = {
+      name: "Pizza Blitz Arbeitszeiterfassung", short_name: "Pizza Blitz",
+      start_url: "./", display: "standalone",
+      background_color: "#1a1a1a", theme_color: "#e8333a",
+      icons: [{ src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%23e8333a'/%3E%3Ctext y='.9em' font-size='80' x='10'%3E🍕%3C/text%3E%3C/svg%3E", sizes: "192x192", type: "image/svg+xml" }]
+    };
+    const blob = new Blob([JSON.stringify(manifestData)], {type: 'application/json'});
+    document.addEventListener('DOMContentLoaded', () => {
+      const link = document.createElement('link'); link.rel = 'manifest';
+      link.href = URL.createObjectURL(blob); document.head.appendChild(link);
+    });
+  </script>
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%23e8333a'/%3E%3Ctext y='.9em' font-size='80' x='10'%3E🍕%3C/text%3E%3C/svg%3E" />
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    body { background: #1a1a1a; color: #f0ece4; font-family: -apple-system, 'Segoe UI', Tahoma, sans-serif; min-height: 100vh; padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
+
+    #root { max-width: 480px; margin: 0 auto; padding: 16px; padding-top: calc(16px + env(safe-area-inset-top)); }
+
+    /* ── Header ── */
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 12px 16px; background: linear-gradient(135deg, #e8333a, #c0242a); border-radius: 16px; box-shadow: 0 4px 20px rgba(232,51,58,0.4); }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon { font-size: 36px; }
+    .logo-title { font-weight: 800; font-size: 20px; letter-spacing: 1px; }
+    .logo-sub { font-size: 11px; opacity: 0.85; }
+    .date-box { text-align: right; }
+    .date-day { font-size: 13px; opacity: 0.85; }
+    .date-num { font-weight: 700; font-size: 13px; }
+
+    /* ── Bottom Nav ── */
+    .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: #1e1e1e; border-top: 1px solid #333; display: flex; z-index: 100; padding-bottom: env(safe-area-inset-bottom); }
+    .nav-tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 0; background: none; border: none; color: #666; font-size: 10px; font-weight: 600; cursor: pointer; font-family: inherit; }
+    .nav-tab.active { color: #e8333a; }
+    .nav-tab svg { width: 22px; height: 22px; fill: currentColor; }
+
+    /* ── Card ── */
+    .card { background: #242424; border-radius: 16px; padding: 16px; margin-bottom: 14px; border: 1px solid #333; position: relative; }
+    .card-title { font-weight: 700; font-size: 12px; color: #e8333a; margin-bottom: 12px; letter-spacing: 1px; text-transform: uppercase; }
+
+    /* ── Special buttons (Urlaub / Feiertag) ── */
+    .special-row { display: flex; gap: 10px; margin-bottom: 12px; }
+    .special-btn { flex: 1; padding: 12px 0; background: #242424; border: 2px solid #333; border-radius: 14px; color: #888; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+    .special-btn.urlaub-active { background: #001a2e; border-color: #4a9eff; color: #4a9eff; }
+    .special-btn.feiertag-active { background: #2a1f00; border-color: #f0a500; color: #f0a500; }
+    .info-banner { border: 2px solid; border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; text-align: center; }
+
+    /* ── Time fields ── */
+    .field-wrap { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid #2e2e2e; }
+    .field-icon { font-size: 18px; width: 26px; text-align: center; flex-shrink: 0; }
+    .field-inner { flex: 1; min-width: 0; }
+    .field-label { display: block; font-size: 11px; color: #777; margin-bottom: 2px; }
+    .time-input { background: transparent; border: none; color: #f0ece4; font-size: 22px; font-weight: 700; outline: none; width: 100%; font-family: inherit; -webkit-appearance: none; }
+    .clear-btn { background: transparent; color: #666; border: 1px solid #444; border-radius: 8px; padding: 6px 10px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; flex-shrink: 0; font-family: inherit; }
+    .now-btn { background: #e8333a; color: #fff; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; flex-shrink: 0; font-family: inherit; }
+    .no-break-row { padding: 10px 0; border-bottom: 1px solid #2e2e2e; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #aaa; cursor: pointer; }
+    .no-break-row input { accent-color: #e8333a; width: 16px; height: 16px; cursor: pointer; }
+
+    /* ── Summary ── */
+    .summary { margin-top: 14px; background: #1a1a1a; border-radius: 10px; padding: 12px; }
+    .summary-row { display: flex; justify-content: space-between; font-size: 13px; color: #888; padding: 4px 0; }
+    .summary-val { font-weight: 600; color: #f0ece4; }
+    .summary-net { border-top: 1px solid #333; margin-top: 6px; padding-top: 10px; font-size: 14px; font-weight: 700; }
+    .net-val { color: #e8333a; font-size: 22px; font-weight: 800; }
+    .saved-badge { position: absolute; top: 12px; right: 16px; background: #2d6a2d; color: #8fff8f; font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 700; display: none; }
+
+    /* ── Textarea / Note ── */
+    textarea { width: 100%; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; color: #f0ece4; font-size: 14px; padding: 10px; resize: none; outline: none; font-family: inherit; }
+
+    /* ── Week nav ── */
+    .nav-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .nav-btn { background: #2e2e2e; border: none; color: #ccc; border-radius: 8px; padding: 8px 14px; font-size: 14px; cursor: pointer; font-family: inherit; }
+    .nav-label { font-weight: 700; font-size: 14px; color: #f0ece4; text-align: center; flex: 1; padding: 0 8px; }
+
+    /* ── Week rows ── */
+    .week-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 8px; border-bottom: 1px solid #2a2a2a; }
+    .week-row.today { background: #2e2e2e; border-radius: 10px; }
+    .day-bubble { width: 38px; height: 38px; border-radius: 10px; background: #2a2a2a; display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0; }
+    .day-bubble.today { background: #e8333a; }
+    .day-bubble-name { font-size: 9px; color: #666; }
+    .day-bubble.today .day-bubble-name { color: #ffcccc; }
+    .day-bubble-num { font-size: 15px; font-weight: 800; color: #ccc; }
+    .day-bubble.today .day-bubble-num { color: #fff; }
+    .week-day-info { flex: 1; padding: 0 8px; }
+    .week-day-times { font-size: 12px; color: #aaa; }
+    .week-day-note { font-size: 11px; color: #777; font-style: italic; }
+    .badge { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 8px; white-space: nowrap; }
+    .week-total { margin-top: 10px; padding-top: 12px; border-top: 1px solid #333; display: flex; justify-content: space-between; font-size: 13px; color: #888; }
+
+    /* ── Month stats ── */
+    .stats-row { display: flex; gap: 8px; margin-bottom: 10px; }
+    .stat-box { flex: 1; background: #242424; border-radius: 14px; padding: 12px 8px; text-align: center; border: 1px solid #333; }
+    .stat-val { font-size: 17px; font-weight: 800; color: #f0ece4; }
+    .stat-val.red { color: #e8333a; }
+    .stat-val.blue { color: #4a9eff; }
+    .stat-val.orange { color: #f0a500; }
+    .stat-lbl { font-size: 10px; color: #777; margin-top: 3px; }
+
+    /* ── Calendar ── */
+    .cal-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin-bottom: 5px; }
+    .cal-header-cell { text-align: center; font-size: 10px; color: #555; padding: 3px 0; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+    .cal-cell { border-radius: 7px; padding: 5px 2px; display: flex; flex-direction: column; align-items: center; min-height: 40px; }
+    .cal-num { font-size: 13px; font-weight: 600; }
+    .cal-sub { font-size: 8px; margin-top: 1px; }
+    .legend { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; padding-top: 10px; border-top: 1px solid #2a2a2a; font-size: 11px; color: #777; }
+    .legend-item { display: flex; align-items: center; gap: 4px; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+    /* ── Export buttons ── */
+    .export-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 13px 16px; background: #2e2e2e; border: 1px solid #3a3a3a; border-radius: 12px; color: #f0ece4; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; margin-bottom: 10px; transition: background 0.15s; }
+    .export-btn:active { background: #3a3a3a; }
+    .export-btn .ebtn-icon { font-size: 20px; width: 28px; text-align: center; }
+    .export-btn .ebtn-text { flex: 1; text-align: left; }
+    .export-btn .ebtn-sub { font-size: 11px; color: #888; display: block; font-weight: 400; margin-top: 1px; }
+
+    /* ── Install banner ── */
+    .install-banner { background: #1e2a1e; border: 1px solid #3a6a3a; border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; font-size: 12px; color: #8fcf8f; display: none; }
+    .install-banner.show { display: block; }
+    .install-banner strong { color: #afffaf; }
+
+
+
+
+    /* ── Print styles ── */
+    @media print {
+      body { background: #fff; color: #000; padding: 0; }
+      .bottom-nav, .install-banner, .special-row, .now-btn, .clear-btn, .export-btn, .nav-btn { display: none !important; }
+      #root { max-width: 100%; padding: 10px; }
+      .header { background: #e8333a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; border-radius: 8px; }
+      .card { border: 1px solid #ccc; background: #fff; color: #000; break-inside: avoid; }
+      .card-title { color: #e8333a; }
+      .print-hide { display: none !important; }
+      #tab-today, #tab-week { display: none !important; }
+      #tab-month { display: block !important; }
+      .stats-row .stat-box { border: 1px solid #ccc; background: #f9f9f9; }
+      .stat-val { color: #000 !important; }
+      .stat-val.red { color: #e8333a !important; }
+      .week-row { border-bottom: 1px solid #eee; }
+      .badge { border: 1px solid #ccc; }
+    }
+  </style>
+</head>
+<body>
+<div id="root">
+
+  <div class="install-banner" id="installBanner">
+    📲 <strong>Als App speichern:</strong> Tippe auf <strong>Teilen</strong> (□↑) → <strong>„Zum Home-Bildschirm"</strong>
+  </div>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">
+      <span class="logo-icon">🍕</span>
+      <div>
+        <div class="logo-title">Pizza Blitz</div>
+        <div class="logo-sub">Arbeitszeiterfassung</div>
+      </div>
+    </div>
+    <div class="date-box">
+      <div class="date-day" id="headerDay"></div>
+      <div class="date-num" id="headerDate"></div>
+    </div>
+  </div>
+
+  <!-- Tab content -->
+  <div id="tab-today"></div>
+  <div id="tab-week" style="display:none"></div>
+  <div id="tab-month" style="display:none"></div>
+  <div id="tab-export" style="display:none"></div>
+
+
+
+
+
+<!-- Day Edit Modal -->
+<div id="dayModal" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.7);align-items:flex-end;justify-content:center">
+  <div id="dayModalBox" style="background:#242424;border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:20px 16px;padding-bottom:calc(30px + env(safe-area-inset-bottom));border-top:1px solid #444;max-height:88vh;overflow-y:auto;-webkit-overflow-scrolling:touch"></div>
+</div>
+</div><!-- /root -->
+
+<!-- Bottom nav -->
+<nav class="bottom-nav">
+  <button class="nav-tab active" id="nav-today" onclick="switchTab('today')">
+    <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+    Heute
+  </button>
+  <button class="nav-tab" id="nav-week" onclick="switchTab('week')">
+    <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
+    Woche
+  </button>
+  <button class="nav-tab" id="nav-month" onclick="switchTab('month')">
+    <svg viewBox="0 0 24 24"><path d="M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"/></svg>
+    Monat
+  </button>
+  <button class="nav-tab" id="nav-export" onclick="switchTab('export')">
+    <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+    Export
+  </button>
+</nav>
+
+<script>
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Constants
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const STORAGE_KEY = "pizza-blitz-worklog";
+const DE_DAYS = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"];
+const DE_DAYS_SHORT = ["So","Mo","Di","Mi","Do","Fr","Sa"];
+const DE_MONTHS = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+
+let log = {};
+let weekOffset = 0;
+let monthOffset = 0;
+let currentTab = "today";
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Storage
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function loadLog() {
+  try { log = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch { log = {}; }
+}
+function saveLog() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(log)); } catch {}
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Time helpers
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function todayKey() { return new Date().toISOString().slice(0, 10); }
+
+function fmtTime(iso) {
+  if (!iso) return "";
+  return new Date(iso).toTimeString().slice(0, 5);
+}
+
+function parseTime(timeStr, dateKey) {
+  if (!timeStr) return null;
+  const [h, m] = timeStr.split(":").map(Number);
+  const base = dateKey ? new Date(dateKey + "T12:00:00") : new Date();
+  base.setHours(h, m, 0, 0);
+  return base.toISOString();
+}
+
+function calcDur(start, end) {
+  if (!start || !end) return null;
+  const diff = (new Date(end) - new Date(start)) / 60000;
+  if (diff <= 0) return null;
+  return { h: Math.floor(diff / 60), m: Math.round(diff % 60), total: diff };
+}
+
+function calcNet(d) {
+  if (!d || !d.checkIn || !d.checkOut) return null;
+  const total = calcDur(d.checkIn, d.checkOut);
+  if (!total) return null;
+  const brk = (d.breakStart && d.breakEnd) ? calcDur(d.breakStart, d.breakEnd) : null;
+  if (!brk) return total;
+  const net = total.total - brk.total;
+  if (net <= 0) return total;
+  return { h: Math.floor(net / 60), m: Math.round(net % 60), total: net };
+}
+
+function durLabel(d) {
+  if (!d) return "—";
+  const hh = (d.h !== undefined) ? d.h : Math.floor((d.total || 0) / 60);
+  const mm = (d.m !== undefined) ? d.m : Math.round((d.total || 0) % 60);
+  return `${hh}:${String(mm).padStart(2, "0")} Std.`;
+}
+
+function getWeekDays(offset) {
+  const now = new Date();
+  now.setDate(now.getDate() + offset * 7);
+  const dow = now.getDay();
+  const mon = new Date(now);
+  mon.setDate(now.getDate() - ((dow + 6) % 7));
+  return Array.from({length: 7}, (_, i) => {
+    const d = new Date(mon); d.setDate(mon.getDate() + i);
+    return d.toISOString().slice(0, 10);
+  });
+}
+
+function getMonthDays(year, month) {
+  const days = [];
+  const d = new Date(year, month, 1);
+  while (d.getMonth() === month) { days.push(d.toISOString().slice(0, 10)); d.setDate(d.getDate() + 1); }
+  return days;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Header
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function renderHeader() {
+  const now = new Date();
+  document.getElementById("headerDay").textContent = DE_DAYS[now.getDay()];
+  document.getElementById("headerDate").textContent = `${now.getDate()}. ${DE_MONTHS[now.getMonth()]} ${now.getFullYear()}`;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Tab switching
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function switchTab(tab) {
+  currentTab = tab;
+  ["today","week","month","export"].forEach(t => {
+    document.getElementById("tab-" + t).style.display = t === tab ? "block" : "none";
+    document.getElementById("nav-" + t).classList.toggle("active", t === tab);
+  });
+  if (tab === "today") renderToday();
+  if (tab === "week") renderWeek();
+  if (tab === "month") renderMonth();
+  if (tab === "export") renderExport();
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// TODAY
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function timeFieldHTML(label, field, icon, dk, value) {
+  const val = value ? fmtTime(value) : "";
+  const clearBtn = value ? `<button class="clear-btn" onclick="clearField('${dk}','${field}')">✕</button>` : "";
+  return `<div class="field-wrap">
+    <span class="field-icon">${icon}</span>
+    <div class="field-inner">
+      <span class="field-label">${label}</span>
+      <input type="time" class="time-input" value="${val}" onchange="setTimeField('${dk}','${field}',this.value)">
+    </div>
+    ${clearBtn}
+    <button class="now-btn" onclick="stampNow('${dk}','${field}')">Jetzt</button>
+  </div>`;
+}
+
+function renderToday() {
+  const dk = todayKey();
+  const d = log[dk] || {};
+  const noBrk = d.noBreak || false;
+
+  let html = `<div class="special-row">
+    <button class="special-btn ${d.type === 'urlaub' ? 'urlaub-active' : ''}" onclick="toggleType('urlaub')">🏖️ Urlaub</button>
+    <button class="special-btn ${d.type === 'feiertag' ? 'feiertag-active' : ''}" onclick="toggleType('feiertag')">🎉 Feiertag</button>
+  </div>`;
+
+  if (d.type === "urlaub") {
+    html += `<div class="info-banner" style="border-color:#4a9eff;background:#001a2e">
+      <span style="color:#4a9eff;font-weight:700">🏖️ Urlaubstag eingetragen</span><br>
+      <span style="font-size:12px;color:#6aafff">Stunden werden später ergänzt</span></div>`;
+  } else if (d.type === "feiertag") {
+    html += `<div class="info-banner" style="border-color:#f0a500;background:#2a1f00">
+      <span style="color:#f0a500;font-weight:700">🎉 Feiertag eingetragen</span></div>`;
+  } else {
+    html += `<div class="card">
+      <div class="card-title">Zeiterfassung</div>
+      ${timeFieldHTML("Arbeitsbeginn","checkIn","🟢",dk,d.checkIn)}
+      <div class="no-break-row">
+        <input type="checkbox" id="noBrkCheck" ${noBrk?"checked":""} onchange="toggleNoBreak(this.checked)">
+        <label for="noBrkCheck">Keine Pause heute</label>
+      </div>`;
+    if (!noBrk) {
+      html += timeFieldHTML("Pause Beginn","breakStart","☕",dk,d.breakStart);
+      html += timeFieldHTML("Pause Ende","breakEnd","🔔",dk,d.breakEnd);
+    }
+    html += timeFieldHTML("Arbeitsende","checkOut","🔴",dk,d.checkOut);
+
+    if (d.checkIn || d.checkOut) {
+      html += `<div class="summary">`;
+      const total = calcDur(d.checkIn, d.checkOut);
+      if (total) html += `<div class="summary-row"><span>Bruttozeit</span><span class="summary-val">${durLabel(total)}</span></div>`;
+      if (!noBrk && d.breakStart && d.breakEnd) {
+        const brk = calcDur(d.breakStart, d.breakEnd);
+        if (brk) html += `<div class="summary-row"><span>Pause</span><span class="summary-val">${durLabel(brk)}</span></div>`;
+      }
+      const net = calcNet(d);
+      if (net) html += `<div class="summary-row summary-net"><span>⏱ Nettoarbeitszeit</span><span class="net-val">${durLabel(net)}</span></div>`;
+      html += `</div>`;
+    }
+    html += `<div id="savedBadge" class="saved-badge">✓ Gespeichert</div></div>`;
+  }
+
+  html += `<div class="card"><div class="card-title">Notiz</div>
+    <textarea rows="2" placeholder="Krankmeldung, Dienstreise, ..." onchange="setNote(this.value)">${d.note||""}</textarea>
+  </div>`;
+
+  document.getElementById("tab-today").innerHTML = html;
+}
+
+function setTimeField(dk, field, val) {
+  if (!log[dk]) log[dk] = {};
+  log[dk][field] = val ? parseTime(val, dk) : null;
+  saveLog(); showSaved(); renderToday();
+}
+function stampNow(dk, field) {
+  if (!log[dk]) log[dk] = {};
+  log[dk][field] = new Date().toISOString();
+  saveLog(); showSaved(); renderToday();
+}
+function clearField(dk, field) {
+  if (!log[dk]) return;
+  log[dk][field] = null;
+  saveLog(); renderToday();
+}
+function toggleType(type) {
+  const dk = todayKey();
+  if (!log[dk]) log[dk] = {};
+  log[dk] = { ...log[dk], type: log[dk].type === type ? null : type, checkIn:null, checkOut:null, breakStart:null, breakEnd:null };
+  saveLog(); renderToday();
+}
+function toggleNoBreak(checked) {
+  const dk = todayKey();
+  if (!log[dk]) log[dk] = {};
+  log[dk].noBreak = checked; saveLog(); renderToday();
+}
+function setNote(val) {
+  const dk = todayKey();
+  if (!log[dk]) log[dk] = {};
+  log[dk].note = val; saveLog();
+}
+function showSaved() {
+  const b = document.getElementById("savedBadge");
+  if (!b) return;
+  b.style.display = "block";
+  setTimeout(() => { if(b) b.style.display = "none"; }, 1500);
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// WEEK
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function renderWeek() {
+  const today = todayKey();
+  const days = getWeekDays(weekOffset);
+  const ws = new Date(days[0]+"T12:00:00"), we = new Date(days[6]+"T12:00:00");
+  const weekLabel = weekOffset===0 ? "Diese Woche" : weekOffset===-1 ? "Letzte Woche" :
+    `${ws.getDate()}. ${DE_MONTHS[ws.getMonth()]} – ${we.getDate()}. ${DE_MONTHS[we.getMonth()]} ${we.getFullYear()}`;
+
+  let totalMins=0, workedCount=0, rowsHTML="";
+  days.forEach(dk => {
+    const d = log[dk]||{};
+    const dateObj = new Date(dk+"T12:00:00");
+    const dow = dateObj.getDay();
+    const isToday = dk===today, isFuture = dk>today;
+    const net = (d.type==="feiertag"||d.type==="urlaub") ? null : calcNet(d);
+    if (net) { totalMins += net.total; workedCount++; }
+
+    let badge, badgeColor, badgeBg;
+    if (isFuture && !d.checkIn && !d.type) { badge="Geplant?"; badgeColor="#555"; badgeBg="transparent"; }
+    else if (isFuture && d.type==="urlaub") { badge="Urlaub"; badgeColor="#4a9eff"; badgeBg="#001a2e"; }
+    else if (isFuture && d.type==="feiertag") { badge="Feiertag"; badgeColor="#f0a500"; badgeBg="#2a2000"; }
+    else if (isFuture && d.checkIn) { badge=durLabel(calcNet(d)||{h:0,m:0})||"geplant"; badgeColor="#888"; badgeBg="#2a2a2a"; }
+    else if (isFuture) { badge="—"; badgeColor="#444"; badgeBg="transparent"; }
+    else if (d.type==="feiertag") { badge="Feiertag"; badgeColor="#f0a500"; badgeBg="#2a2000"; }
+    else if (d.type==="urlaub") { badge="Urlaub"; badgeColor="#4a9eff"; badgeBg="#001a2e"; }
+    else if (net) { badge=durLabel(net); badgeColor="#e8333a"; badgeBg="#2a1a1a"; }
+    else { badge="Kein Eintrag"; badgeColor="#444"; badgeBg="transparent"; }
+
+    const timesStr = d.checkIn ? `🟢 ${fmtTime(d.checkIn)}${d.checkOut?"  🔴 "+fmtTime(d.checkOut):""}` : "";
+    const brkStr = (d.breakStart&&d.breakEnd) ? `☕ ${fmtTime(d.breakStart)} – ${fmtTime(d.breakEnd)}` : "";
+
+    rowsHTML += `<div class="week-row ${isToday?'today':''}" onclick="openDayModal('${dk}')" style="cursor:pointer">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="day-bubble ${isToday?'today':''}">
+          <span class="day-bubble-name">${DE_DAYS_SHORT[dow]}</span>
+          <span class="day-bubble-num">${dateObj.getDate()}</span>
+        </div>
+        <div class="week-day-info">
+          ${timesStr?`<div class="week-day-times">${timesStr}</div>`:""}
+          ${brkStr?`<div class="week-day-times" style="color:#666">${brkStr}</div>`:""}
+          ${d.note?`<div class="week-day-note">${d.note}</div>`:""}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="badge" style="color:${badgeColor};background:${badgeBg}">${badge}</span>
+        <span style="color:#555;font-size:14px">✏️</span>
+      </div>
+    </div>`;
+  });
+
+  document.getElementById("tab-week").innerHTML = `
+    <div class="nav-row">
+      <button class="nav-btn" onclick="changeWeek(-1)">◀</button>
+      <span class="nav-label">${weekLabel}</span>
+      <button class="nav-btn" onclick="changeWeek(1)" ${weekOffset>=4?'style="opacity:0.3"':""}>▶</button>
+    </div>
+    <div class="card">
+      ${rowsHTML}
+      <div class="week-total">
+        <span>Arbeitstage: <strong style="color:#f0ece4">${workedCount}</strong></span>
+        <span>Gesamt: <strong style="color:#e8333a">${durLabel({h:Math.floor(totalMins/60),m:Math.round(totalMins%60)})}</strong></span>
+      </div>
+    </div>`;
+}
+function changeWeek(dir) { if(dir>0&&weekOffset>=4)return; weekOffset+=dir; renderWeek(); }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// MONTH
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function renderMonth() {
+  const today = todayKey();
+  const now = new Date();
+  const target = new Date(now.getFullYear(), now.getMonth()+monthOffset, 1);
+  const year=target.getFullYear(), month=target.getMonth();
+  const days = getMonthDays(year, month);
+
+  let totalMins=0, workedDays=0, urlaubDays=0, feiertagDays=0;
+  days.filter(d=>d<=today).forEach(dk=>{
+    const d=log[dk]||{};
+    if(d.type==="urlaub"){urlaubDays++;return;}
+    if(d.type==="feiertag"){feiertagDays++;return;}
+    const net=calcNet(d); if(net){totalMins+=net.total;workedDays++;}
+  });
+  const avgMins = workedDays>0 ? totalMins/workedDays : 0;
+  const tH=Math.floor(totalMins/60), tM=Math.round(totalMins%60);
+  const aH=Math.floor(avgMins/60), aM=Math.round(avgMins%60);
+
+  const firstDow=new Date(year,month,1).getDay();
+  const gridOffset=(firstDow+6)%7;
+  const grid=[...Array(gridOffset).fill(null),...days];
+
+  let calCells="";
+  grid.forEach(dk=>{
+    if(!dk){calCells+=`<div class="cal-cell" style="background:transparent"></div>`;return;}
+    const d=log[dk]||{};
+    const isToday=dk===today, isFuture=dk>today;
+    const net=calcNet(d);
+    const dateNum=new Date(dk+"T12:00:00").getDate();
+    let bg="#2a2a2a",color="#555",subTxt="",subColor="";
+    if(isToday){bg="#e8333a";color="#fff";}
+    else if(d.type==="urlaub"){bg="#001a2e";color="#4a9eff";subTxt="U";subColor="#4a9eff";}
+    else if(d.type==="feiertag"){bg="#2a1f00";color="#f0a500";subTxt="F";subColor="#f0a500";}
+    else if(net){bg="#2a1a1a";color="#e8333a";subTxt=`${net.h}:${String(net.m).padStart(2,"0")}`;subColor="#e8333a";}
+    else if(!isFuture){bg="#1e1e1e";color="#3a3a3a";}
+    else{bg="transparent";}
+    calCells+=`<div class="cal-cell" style="background:${bg}">
+      <span class="cal-num" style="color:${color};font-weight:${isToday?800:600}">${dateNum}</span>
+      ${subTxt&&!isToday?`<span class="cal-sub" style="color:${subColor}">${subTxt}</span>`:""}
+    </div>`;
+  });
+
+  let extraStats="";
+  if(urlaubDays>0||feiertagDays>0){
+    extraStats=`<div class="stats-row" style="margin-top:-2px">`;
+    if(urlaubDays>0) extraStats+=`<div class="stat-box" style="border-color:#1a3a5c"><div class="stat-val blue">${urlaubDays}</div><div class="stat-lbl">Urlaubstage</div></div>`;
+    if(feiertagDays>0) extraStats+=`<div class="stat-box" style="border-color:#3a2a00"><div class="stat-val orange">${feiertagDays}</div><div class="stat-lbl">Feiertage</div></div>`;
+    extraStats+=`</div>`;
+  }
+
+  document.getElementById("tab-month").innerHTML = `
+    <div class="nav-row">
+      <button class="nav-btn" onclick="changeMonth(-1)">◀</button>
+      <span class="nav-label">${DE_MONTHS[month]} ${year}</span>
+      <button class="nav-btn" onclick="changeMonth(1)" ${monthOffset>=0?'style="opacity:0.3"':""}>▶</button>
+    </div>
+    <div class="stats-row">
+      <div class="stat-box"><div class="stat-val">${workedDays}</div><div class="stat-lbl">Arbeitstage</div></div>
+      <div class="stat-box"><div class="stat-val red">${durLabel({h:tH,m:tM})}</div><div class="stat-lbl">Gesamt</div></div>
+      <div class="stat-box"><div class="stat-val">${durLabel({h:aH,m:aM})}</div><div class="stat-lbl">Ø pro Tag</div></div>
+    </div>
+    ${extraStats}
+    <div class="card">
+      <div class="cal-header">${["Mo","Di","Mi","Do","Fr","Sa","So"].map(d=>`<div class="cal-header-cell">${d}</div>`).join("")}</div>
+      <div class="cal-grid">${calCells}</div>
+      <div class="legend">
+        <span class="legend-item"><span class="legend-dot" style="background:#e8333a"></span>Heute</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#2a1a1a;border:1px solid #e8333a"></span>Arbeit</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#001a2e;border:1px solid #4a9eff"></span>Urlaub</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#2a1f00;border:1px solid #f0a500"></span>Feiertag</span>
+      </div>
+    </div>`;
+}
+function changeMonth(dir) { if(dir>0&&monthOffset>=0)return; monthOffset+=dir; renderMonth(); }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// EXPORT TAB
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function renderExport() {
+  const now = new Date();
+  const curMonth = now.toISOString().substring(0,7);
+  document.getElementById("tab-export").innerHTML = `
+    <div class="card">
+      <div class="card-title">Monat auswählen</div>
+      <input type="month" id="exportMonth" value="${curMonth}"
+        style="width:100%;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:8px;color:#f0ece4;font-size:16px;outline:none;font-family:inherit">
+    </div>
+    <div class="card">
+      <div class="card-title">Export & Druck</div>
+
+      <button class="export-btn" onclick="exportCSV()">
+        <span class="ebtn-icon">📊</span>
+        <span class="ebtn-text">CSV exportieren
+          <span class="ebtn-sub">Für Excel, Planningify & andere Apps</span>
+        </span>
+      </button>
+
+      <button class="export-btn" onclick="exportTXT()">
+        <span class="ebtn-icon">📄</span>
+        <span class="ebtn-text">Textbericht exportieren
+          <span class="ebtn-sub">Einfache Zusammenfassung als .txt</span>
+        </span>
+      </button>
+
+      <button class="export-btn" onclick="printMonth()">
+        <span class="ebtn-icon">🖨️</span>
+        <span class="ebtn-text">Monatsbericht drucken / PDF
+          <span class="ebtn-sub">Als PDF speichern oder drucken</span>
+        </span>
+      </button>
+    </div>
+
+    <div class="card" id="exportPreview"></div>`;
+
+  renderExportPreview();
+}
+
+function getExportMonth() {
+  const el = document.getElementById("exportMonth");
+  return el ? el.value : new Date().toISOString().substring(0,7);
+}
+
+function renderExportPreview() {
+  const filter = getExportMonth();
+  const [year, month] = filter.split("-").map(Number);
+  const days = getMonthDays(year, month-1);
+  const today = todayKey();
+
+  let rows = [], totalMins=0, worked=0, urlaub=0, feiertag=0;
+  days.forEach(dk => {
+    const d = log[dk]||{};
+    if (d.type==="urlaub") { urlaub++; rows.push({dk,type:"urlaub"}); return; }
+    if (d.type==="feiertag") { feiertag++; rows.push({dk,type:"feiertag"}); return; }
+    const net = calcNet(d);
+    if (net) { totalMins+=net.total; worked++; rows.push({dk,d,net}); }
+  });
+
+  if (rows.length===0) {
+    document.getElementById("exportPreview").innerHTML = `<div class="card-title">Vorschau</div><p style="color:#666;font-size:13px">Keine Daten für ${DE_MONTHS[month-1]} ${year}</p>`;
+    return;
+  }
+
+  let html = `<div class="card-title">Vorschau – ${DE_MONTHS[month-1]} ${year}</div>`;
+  rows.forEach(r => {
+    const dateObj = new Date(r.dk+"T12:00:00");
+    const dateFmt = `${String(dateObj.getDate()).padStart(2,"0")}.${String(dateObj.getMonth()+1).padStart(2,"0")}.${dateObj.getFullYear()}`;
+    const dow = DE_DAYS_SHORT[dateObj.getDay()];
+    if (r.type==="urlaub") {
+      html+=`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #2e2e2e;font-size:13px">
+        <span style="color:#888">${dow} ${dateFmt}</span><span style="color:#4a9eff">🏖️ Urlaub</span></div>`;
+    } else if (r.type==="feiertag") {
+      html+=`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #2e2e2e;font-size:13px">
+        <span style="color:#888">${dow} ${dateFmt}</span><span style="color:#f0a500">🎉 Feiertag</span></div>`;
+    } else {
+      const ci=fmtTime(r.d.checkIn), co=fmtTime(r.d.checkOut);
+      const bs=r.d.breakStart?fmtTime(r.d.breakStart):"", be=r.d.breakEnd?fmtTime(r.d.breakEnd):"";
+      const brkTxt = (bs&&be) ? ` | Pause: ${bs}–${be}` : "";
+      html+=`<div style="padding:6px 0;border-bottom:1px solid #2e2e2e;font-size:13px">
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:#888">${dow} ${dateFmt}</span>
+          <span style="color:#e8333a;font-weight:700">${durLabel(r.net)}</span>
+        </div>
+        <div style="color:#666;font-size:11px">${ci} – ${co}${brkTxt}</div>
+      </div>`;
+    }
+  });
+
+  const tH=Math.floor(totalMins/60), tM=Math.round(totalMins%60);
+  html+=`<div style="margin-top:12px;padding-top:10px;border-top:1px solid #444;display:flex;justify-content:space-between;font-size:14px">
+    <span style="color:#888">Arbeitstage: <strong style="color:#f0ece4">${worked}</strong></span>
+    <span style="color:#888">Gesamt: <strong style="color:#e8333a">${durLabel({h:tH,m:tM})}</strong></span>
+  </div>`;
+
+  document.getElementById("exportPreview").innerHTML = html;
+}
+
+function exportCSV() {
+  const filter = getExportMonth();
+  const [year, month] = filter.split("-").map(Number);
+  const days = getMonthDays(year, month-1);
+
+  let csv = "Datum,Tag,Arbeitsbeginn,Arbeitsende,Pause Beginn,Pause Ende,Bruttozeit,Pausenzeit,Nettoarbeitszeit,Typ,Notiz\n";
+  days.forEach(dk => {
+    const d = log[dk]||{};
+    const dateObj = new Date(dk+"T12:00:00");
+    const dateFmt = `${String(dateObj.getDate()).padStart(2,"0")}.${String(dateObj.getMonth()+1).padStart(2,"0")}.${dateObj.getFullYear()}`;
+    const dow = DE_DAYS[dateObj.getDay()];
+    if (d.type==="urlaub") { csv+=`${dateFmt},${dow},,,,,,,,Urlaub,${d.note||""}\n`; return; }
+    if (d.type==="feiertag") { csv+=`${dateFmt},${dow},,,,,,,,Feiertag,${d.note||""}\n`; return; }
+    const net=calcNet(d); if(!net) return;
+    const total=calcDur(d.checkIn,d.checkOut);
+    const brk=(d.breakStart&&d.breakEnd)?calcDur(d.breakStart,d.breakEnd):null;
+    csv+=`${dateFmt},${dow},${fmtTime(d.checkIn)},${fmtTime(d.checkOut)},${d.breakStart?fmtTime(d.breakStart):""},${d.breakEnd?fmtTime(d.breakEnd):""},${durLabel(total)},${brk?durLabel(brk):"0:00 Std."},${durLabel(net)},Arbeit,${d.note||""}\n`;
+  });
+
+  downloadFile(`Pizza_Blitz_${filter}.csv`, csv, "text/csv;charset=utf-8");
+}
+
+function exportTXT() {
+  const filter = getExportMonth();
+  const [year, month] = filter.split("-").map(Number);
+  const days = getMonthDays(year, month-1);
+  const monthName = `${DE_MONTHS[month-1]} ${year}`;
+
+  let txt = `Pizza Blitz – Arbeitszeitbericht\n`;
+  txt += `${"=".repeat(40)}\n`;
+  txt += `Monat: ${monthName}\n`;
+  txt += `Erstellt: ${new Date().toLocaleDateString("de-DE")}\n`;
+  txt += `${"=".repeat(40)}\n\n`;
+
+  let totalMins=0, worked=0;
+  days.forEach(dk => {
+    const d=log[dk]||{};
+    const dateObj=new Date(dk+"T12:00:00");
+    const dateFmt=`${String(dateObj.getDate()).padStart(2,"0")}.${String(dateObj.getMonth()+1).padStart(2,"0")}.${year}`;
+    const dow=DE_DAYS_SHORT[dateObj.getDay()];
+    if(d.type==="urlaub"){txt+=`${dow} ${dateFmt}  →  🏖️ Urlaub\n`;return;}
+    if(d.type==="feiertag"){txt+=`${dow} ${dateFmt}  →  🎉 Feiertag\n`;return;}
+    const net=calcNet(d); if(!net) return;
+    totalMins+=net.total; worked++;
+    const brk=(d.breakStart&&d.breakEnd)?`Pause: ${fmtTime(d.breakStart)}–${fmtTime(d.breakEnd)}  |  `:"";
+    txt+=`${dow} ${dateFmt}  →  ${fmtTime(d.checkIn)} – ${fmtTime(d.checkOut)}  |  ${brk}Netto: ${durLabel(net)}\n`;
+    if(d.note) txt+=`           Notiz: ${d.note}\n`;
+  });
+
+  const tH=Math.floor(totalMins/60), tM=Math.round(totalMins%60);
+  txt+=`\n${"─".repeat(40)}\n`;
+  txt+=`Arbeitstage: ${worked}\n`;
+  txt+=`Gesamtstunden: ${durLabel({h:tH,m:tM})}\n`;
+  if(worked>0){const aM=totalMins/worked;txt+=`Durchschnitt/Tag: ${durLabel({h:Math.floor(aM/60),m:Math.round(aM%60)})}\n`;}
+
+  downloadFile(`Pizza_Blitz_${filter}.txt`, txt, "text/plain;charset=utf-8");
+}
+
+function downloadFile(filename, content, mimeType) {
+  const blob = new Blob(["\uFEFF" + content], {type: mimeType});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function printMonth() {
+  // Switch to month view then print
+  const filter = getExportMonth();
+  const [year, month] = filter.split("-").map(Number);
+  monthOffset = (year - new Date().getFullYear()) * 12 + (month - 1 - new Date().getMonth());
+  switchTab("month");
+  setTimeout(() => window.print(), 300);
+}
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// DAY EDIT MODAL (iOS select wheels)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let modalDk = null;
+
+function openDayModal(dk) {
+  modalDk = dk;
+  const el = document.getElementById("dayModal");
+  el.style.display = "flex";
+  renderDayModal();
+}
+
+function closeModal() {
+  document.getElementById("dayModal").style.display = "none";
+  modalDk = null;
+  renderWeek();
+}
+
+function renderDayModal() {
+  const dk = modalDk;
+  const d = log[dk] || {};
+  const noBrk = d.noBreak || false;
+  const dateObj = new Date(dk + "T12:00:00");
+  const isToday = dk === todayKey();
+  const isFuture = dk > todayKey();
+  const title = `${DE_DAYS[dateObj.getDay()]}, ${dateObj.getDate()}. ${DE_MONTHS[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
+  const planTag = isFuture ? `<span style="background:#2e2e2e;color:#888;font-size:11px;padding:3px 8px;border-radius:8px;margin-right:4px">Planung</span>` : "";
+
+  let html = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <span style="font-weight:800;font-size:16px;color:#f0ece4">${planTag}${title}</span>
+      <button onclick="closeModal()" style="background:#333;border:none;color:#ccc;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">✕</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button onclick="modalToggleType('urlaub')" style="flex:1;padding:10px;background:${d.type==='urlaub'?'#001a2e':'#2e2e2e'};border:2px solid ${d.type==='urlaub'?'#4a9eff':'#333'};border-radius:12px;color:${d.type==='urlaub'?'#4a9eff':'#888'};font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">🏖️ Urlaub</button>
+      <button onclick="modalToggleType('feiertag')" style="flex:1;padding:10px;background:${d.type==='feiertag'?'#2a1f00':'#2e2e2e'};border:2px solid ${d.type==='feiertag'?'#f0a500':'#333'};border-radius:12px;color:${d.type==='feiertag'?'#f0a500':'#888'};font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">🎉 Feiertag</button>
+    </div>`;
+
+  if (d.type === "urlaub") {
+    html += `<div style="text-align:center;padding:16px;background:#001a2e;border:2px solid #4a9eff;border-radius:12px;color:#4a9eff;font-weight:700">🏖️ Urlaubstag eingetragen</div>`;
+  } else if (d.type === "feiertag") {
+    html += `<div style="text-align:center;padding:16px;background:#2a1f00;border:2px solid #f0a500;border-radius:12px;color:#f0a500;font-weight:700">🎉 Feiertag eingetragen</div>`;
+  } else {
+    // Time fields using select wheels
+    html += modalSelectField("Arbeitsbeginn", "checkIn", "🟢", dk, d.checkIn, isToday);
+    html += `<div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid #2e2e2e">
+      <input type="checkbox" id="mNoBrk" ${noBrk?"checked":""} onchange="modalToggleNoBreak(this.checked)" style="accent-color:#e8333a;width:16px;height:16px">
+      <label for="mNoBrk" style="font-size:13px;color:#aaa;cursor:pointer">Keine Pause</label>
+    </div>`;
+    if (!noBrk) {
+      html += modalSelectField("Pause Beginn", "breakStart", "☕", dk, d.breakStart, false);
+      html += modalSelectField("Pause Ende", "breakEnd", "🔔", dk, d.breakEnd, false);
+    }
+    html += modalSelectField("Arbeitsende", "checkOut", "🔴", dk, d.checkOut, isToday);
+
+    const net = calcNet(d);
+    if (net) {
+      html += `<div style="margin-top:12px;background:#1a1a1a;border-radius:10px;padding:12px;display:flex;justify-content:space-between;align-items:center">
+        <span style="color:#888;font-size:13px">⏱ Nettoarbeitszeit</span>
+        <span style="color:#e8333a;font-size:20px;font-weight:800">${durLabel(net)}</span>
+      </div>`;
+    }
+  }
+
+  // Note
+  html += `<div style="margin-top:12px">
+    <div style="font-size:11px;color:#777;margin-bottom:4px">NOTIZ</div>
+    <textarea rows="2" placeholder="Krankmeldung, Dienstreise, ..." onchange="modalSetNote(this.value)" style="width:100%;background:#1a1a1a;border:1px solid #333;border-radius:8px;color:#f0ece4;font-size:14px;padding:10px;resize:none;outline:none;font-family:inherit">${d.note||""}</textarea>
+  </div>
+  <button onclick="closeModal()" style="width:100%;padding:14px;background:#e8333a;border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:12px">✓ Fertig</button>`;
+
+  document.getElementById("dayModalBox").innerHTML = html;
+}
+
+function modalSelectField(label, field, icon, dk, value, showJetzt) {
+  const curH = value ? new Date(value).getHours() : -1;
+  const curM = value ? new Date(value).getMinutes() : -1;
+
+  // Hours 0-23
+  let hOpts = `<option value="">--</option>`;
+  for (let h = 0; h < 24; h++) {
+    hOpts += `<option value="${h}" ${h===curH?'selected':''}>${String(h).padStart(2,'0')}</option>`;
+  }
+  // Minutes 0,5,10...55
+  let mOpts = `<option value="">--</option>`;
+  for (let m = 0; m < 60; m += 5) {
+    const sel = curM >= 0 && Math.abs(m - curM) < 3 ? 'selected' : '';
+    mOpts += `<option value="${m}" ${sel}>${String(m).padStart(2,'0')}</option>`;
+  }
+
+  const clearBtn = value ? `<button onclick="modalClearField('${field}')" style="background:transparent;color:#666;border:1px solid #444;border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;white-space:nowrap;font-family:inherit">✕</button>` : "";
+  const jetzt = showJetzt ? `<button onclick="modalStampNow('${field}')" style="background:#e8333a;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit">Jetzt</button>` : "";
+
+  const selStyle = `background:#1a1a1a;border:1px solid #444;border-radius:8px;color:#f0ece4;font-size:22px;font-weight:700;padding:6px 2px;outline:none;font-family:inherit;flex:1;text-align:center`;
+
+  return `<div style="padding:10px 0;border-bottom:1px solid #2e2e2e">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:18px;width:26px;text-align:center;flex-shrink:0">${icon}</span>
+      <div style="flex:1">
+        <div style="font-size:11px;color:#777;margin-bottom:6px">${label}</div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <select style="${selStyle}" onchange="modalSetHM('${field}',this.value,null)">
+            ${hOpts}
+          </select>
+          <span style="font-size:22px;font-weight:700;color:#888">:</span>
+          <select style="${selStyle}" onchange="modalSetHM('${field}',null,this.value)">
+            ${mOpts}
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+        ${clearBtn}
+        ${jetzt}
+      </div>
+    </div>
+  </div>`;
+}
+
+function modalSetHM(field, hVal, mVal) {
+  if (!log[modalDk]) log[modalDk] = {};
+  const existing = log[modalDk][field] ? new Date(log[modalDk][field]) : new Date(modalDk + "T12:00:00");
+  const curH = log[modalDk][field] ? new Date(log[modalDk][field]).getHours() : -1;
+  const curM = log[modalDk][field] ? new Date(log[modalDk][field]).getMinutes() : -1;
+  const newH = hVal !== null && hVal !== "" ? parseInt(hVal) : curH;
+  const newM = mVal !== null && mVal !== "" ? parseInt(mVal) : (curM >= 0 ? curM : 0);
+  if (newH >= 0) {
+    const base = new Date(modalDk + "T12:00:00");
+    base.setHours(newH, newM, 0, 0);
+    log[modalDk][field] = base.toISOString();
+    saveLog();
+    // Update summary only
+    const net = calcNet(log[modalDk]);
+    const box = document.getElementById("dayModalBox");
+    if (box) {
+      const summaryDiv = box.querySelector('.modal-summary');
+      if (summaryDiv) {
+        summaryDiv.style.display = net ? 'flex' : 'none';
+        if (net) summaryDiv.querySelector('.modal-net').textContent = durLabel(net);
+      }
+    }
+  }
+}
+
+function modalClearField(field) {
+  if (!log[modalDk]) return;
+  log[modalDk][field] = null;
+  saveLog(); renderDayModal();
+}
+
+function modalStampNow(field) {
+  if (!log[modalDk]) log[modalDk] = {};
+  log[modalDk][field] = new Date().toISOString();
+  saveLog(); renderDayModal();
+}
+
+function modalToggleType(type) {
+  if (!log[modalDk]) log[modalDk] = {};
+  log[modalDk] = {...log[modalDk], type: log[modalDk].type===type?null:type, checkIn:null, checkOut:null, breakStart:null, breakEnd:null};
+  saveLog(); renderDayModal();
+}
+
+function modalToggleNoBreak(checked) {
+  if (!log[modalDk]) log[modalDk] = {};
+  log[modalDk].noBreak = checked;
+  saveLog(); renderDayModal();
+}
+
+function modalSetNote(val) {
+  if (!log[modalDk]) log[modalDk] = {};
+  log[modalDk].note = val;
+  saveLog();
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// iOS install hint
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function checkInstallHint() {
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isStandalone = window.navigator.standalone === true;
+  if (isIOS && !isStandalone) document.getElementById("installBanner").classList.add("show");
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Init
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+loadLog();
+renderHeader();
+renderToday();
+checkInstallHint();
+</script>
+</body>
+</html>
