@@ -59,7 +59,7 @@
     .info-banner { border: 2px solid; border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; text-align: center; }
 
     /* ── Time fields ── */
-    .field-wrap { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid #2e2e2e; }
+    .field-wrap { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid #2e2e2e; cursor: pointer; }
     .field-icon { font-size: 18px; width: 26px; text-align: center; flex-shrink: 0; }
     .field-inner { flex: 1; min-width: 0; }
     .field-label { display: block; font-size: 11px; color: #777; margin-bottom: 2px; }
@@ -260,7 +260,8 @@ function calcDur(start, end) {
   if (!start || !end) return null;
   const diff = (new Date(end) - new Date(start)) / 60000;
   if (diff <= 0) return null;
-  return { h: Math.floor(diff / 60), m: Math.round(diff % 60), total: diff };
+  const totalMin = Math.round(diff);
+  return { h: Math.floor(totalMin / 60), m: totalMin % 60, total: diff };
 }
 
 function calcNet(d) {
@@ -269,9 +270,9 @@ function calcNet(d) {
   if (!total) return null;
   const brk = (d.breakStart && d.breakEnd) ? calcDur(d.breakStart, d.breakEnd) : null;
   if (!brk) return total;
-  const net = total.total - brk.total;
-  if (net <= 0) return total;
-  return { h: Math.floor(net / 60), m: Math.round(net % 60), total: net };
+  const netMin = Math.round(total.total) - Math.round(brk ? brk.total : 0);
+  if (netMin <= 0) return total;
+  return { h: Math.floor(netMin / 60), m: netMin % 60, total: netMin };
 }
 
 function durLabel(d) {
@@ -329,16 +330,20 @@ function switchTab(tab) {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function timeFieldHTML(label, field, icon, dk, value) {
   const val = value ? fmtTime(value) : "";
-  const clearBtn = value ? `<button class="clear-btn" onclick="clearField('${dk}','${field}')">✕</button>` : "";
-  return `<div class="field-wrap">
+  const clearBtn = value
+    ? `<button class="clear-btn" onclick="event.preventDefault();clearField('${dk}','${field}')">✕</button>`
+    : "";
+  return `<label for="ti_${field}" class="field-wrap" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid #2e2e2e">
     <span class="field-icon">${icon}</span>
-    <div class="field-inner">
+    <div class="field-inner" style="flex:1;min-width:0">
       <span class="field-label">${label}</span>
-      <input type="time" class="time-input" value="${val}" onchange="setTimeField('${dk}','${field}',this.value)">
+      <input type="time" id="ti_${field}" class="time-input" value="${val}"
+        onchange="setTimeField('${dk}','${field}',this.value)"
+        oninput="setTimeField('${dk}','${field}',this.value)">
     </div>
-    ${clearBtn}
-    <button class="now-btn" onclick="stampNow('${dk}','${field}')">Jetzt</button>
-  </div>`;
+    <button id="clearBtn_${field}" class="clear-btn" onclick="event.preventDefault();clearField('${dk}','${field}')" style="display:${value?'inline-block':'none'}">✕</button>
+    <button class="now-btn" onclick="event.preventDefault();stampNow('${dk}','${field}')">Jetzt</button>
+  </label>`;
 }
 
 function renderToday() {
@@ -372,18 +377,14 @@ function renderToday() {
     }
     html += timeFieldHTML("Arbeitsende","checkOut","🔴",dk,d.checkOut);
 
-    if (d.checkIn || d.checkOut) {
-      html += `<div class="summary">`;
-      const total = calcDur(d.checkIn, d.checkOut);
-      if (total) html += `<div class="summary-row"><span>Bruttozeit</span><span class="summary-val">${durLabel(total)}</span></div>`;
-      if (!noBrk && d.breakStart && d.breakEnd) {
-        const brk = calcDur(d.breakStart, d.breakEnd);
-        if (brk) html += `<div class="summary-row"><span>Pause</span><span class="summary-val">${durLabel(brk)}</span></div>`;
-      }
-      const net = calcNet(d);
-      if (net) html += `<div class="summary-row summary-net"><span>⏱ Nettoarbeitszeit</span><span class="net-val">${durLabel(net)}</span></div>`;
-      html += `</div>`;
-    }
+    const total = calcDur(d.checkIn, d.checkOut);
+    const brk2 = (!noBrk && d.breakStart && d.breakEnd) ? calcDur(d.breakStart, d.breakEnd) : null;
+    const net = calcNet(d);
+    html += `<div id="todaySummary" class="summary" style="display:${(d.checkIn||d.checkOut)?'block':'none'}">
+      <div class="summary-row"><span>Bruttozeit</span><span id="todayBrutto" class="summary-val">${total?durLabel(total):'—'}</span></div>
+      <div class="summary-row" style="display:${brk2?'flex':'none'}"><span>Pause</span><span id="todayPause" class="summary-val">${brk2?durLabel(brk2):''}</span></div>
+      <div class="summary-row summary-net" style="display:${net?'flex':'none'}"><span>⏱ Nettoarbeitszeit</span><span id="todayNetto" class="net-val">${net?durLabel(net):''}</span></div>
+    </div>`;
     html += `<div id="savedBadge" class="saved-badge">✓ Gespeichert</div></div>`;
   }
 
@@ -397,17 +398,57 @@ function renderToday() {
 function setTimeField(dk, field, val) {
   if (!log[dk]) log[dk] = {};
   log[dk][field] = val ? parseTime(val, dk) : null;
-  saveLog(); showSaved(); renderToday();
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(log)); } catch {}
+  scheduleSyncAfterChange();
+  showSaved();
+  // Update only summary — no full re-render
+  updateTodaySummary(dk);
+}
+
+function updateTodaySummary(dk) {
+  const d = log[dk] || {};
+  const noBrk = d.noBreak || false;
+  const total = calcDur(d.checkIn, d.checkOut);
+  const brk = (!noBrk && d.breakStart && d.breakEnd) ? calcDur(d.breakStart, d.breakEnd) : null;
+  const net = calcNet(d);
+
+  const elTotal = document.getElementById("todayBrutto");
+  const elBrk = document.getElementById("todayPause");
+  const elNet = document.getElementById("todayNetto");
+  const elSummary = document.getElementById("todaySummary");
+
+  if (elSummary) elSummary.style.display = (d.checkIn || d.checkOut) ? "block" : "none";
+  if (elTotal) { elTotal.textContent = total ? durLabel(total) : "—"; }
+  if (elBrk) { elBrk.parentElement.style.display = (brk) ? "flex" : "none"; elBrk.textContent = brk ? durLabel(brk) : ""; }
+  if (elNet) { elNet.textContent = net ? durLabel(net) : "—"; elNet.style.display = net ? "block" : "none"; }
+
+  // Update clear buttons without re-render
+  ["checkIn","breakStart","breakEnd","checkOut"].forEach(f => {
+    const clearBtn = document.getElementById("clearBtn_" + f);
+    if (clearBtn) clearBtn.style.display = log[dk] && log[dk][f] ? "inline-block" : "none";
+  });
 }
 function stampNow(dk, field) {
   if (!log[dk]) log[dk] = {};
   log[dk][field] = new Date().toISOString();
-  saveLog(); showSaved(); renderToday();
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(log)); } catch {}
+  scheduleSyncAfterChange();
+  showSaved();
+  // Update time input value directly
+  const inp = document.getElementById("ti_" + field);
+  if (inp) inp.value = fmtTime(log[dk][field]);
+  updateTodaySummary(dk);
 }
 function clearField(dk, field) {
   if (!log[dk]) return;
   log[dk][field] = null;
-  saveLog(); renderToday();
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(log)); } catch {}
+  scheduleSyncAfterChange();
+  const inp = document.getElementById("ti_" + field);
+  if (inp) inp.value = "";
+  const cb = document.getElementById("clearBtn_" + field);
+  if (cb) cb.style.display = "none";
+  updateTodaySummary(dk);
 }
 function toggleType(type) {
   const dk = todayKey();
@@ -813,12 +854,10 @@ function renderDayModal() {
     html += modalSelectField("Arbeitsende", "checkOut", "🔴", dk, d.checkOut, isToday);
 
     const net = calcNet(d);
-    if (net) {
-      html += `<div style="margin-top:12px;background:#1a1a1a;border-radius:10px;padding:12px;display:flex;justify-content:space-between;align-items:center">
-        <span style="color:#888;font-size:13px">⏱ Nettoarbeitszeit</span>
-        <span style="color:#e8333a;font-size:20px;font-weight:800">${durLabel(net)}</span>
-      </div>`;
-    }
+    html += `<div id="modalNetSummary" style="margin-top:12px;background:#1a1a1a;border-radius:10px;padding:12px;display:${net?'flex':'none'};justify-content:space-between;align-items:center">
+      <span style="color:#888;font-size:13px">⏱ Nettoarbeitszeit</span>
+      <span id="modalNetVal" style="color:#e8333a;font-size:20px;font-weight:800">${net?durLabel(net):''}</span>
+    </div>`;
   }
 
   // Note
@@ -832,42 +871,25 @@ function renderDayModal() {
 }
 
 function modalSelectField(label, field, icon, dk, value, showJetzt) {
-  const curH = value ? new Date(value).getHours() : -1;
-  const curM = value ? new Date(value).getMinutes() : -1;
-
-  // Hours 0-23
-  let hOpts = `<option value="">--</option>`;
-  for (let h = 0; h < 24; h++) {
-    hOpts += `<option value="${h}" ${h===curH?'selected':''}>${String(h).padStart(2,'0')}</option>`;
-  }
-  // Minutes 0,5,10...55
-  let mOpts = `<option value="">--</option>`;
-  for (let m = 0; m < 60; m += 5) {
-    const sel = curM >= 0 && Math.abs(m - curM) < 3 ? 'selected' : '';
-    mOpts += `<option value="${m}" ${sel}>${String(m).padStart(2,'0')}</option>`;
-  }
-
-  const clearBtn = value ? `<button onclick="modalClearField('${field}')" style="background:transparent;color:#666;border:1px solid #444;border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;white-space:nowrap;font-family:inherit">✕</button>` : "";
-  const jetzt = showJetzt ? `<button onclick="modalStampNow('${field}')" style="background:#e8333a;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit">Jetzt</button>` : "";
-
-  const selStyle = `background:#1a1a1a;border:1px solid #444;border-radius:8px;color:#f0ece4;font-size:22px;font-weight:700;padding:6px 2px;outline:none;font-family:inherit;flex:1;text-align:center`;
-
-  return `<div style="padding:10px 0;border-bottom:1px solid #2e2e2e">
-    <div style="display:flex;align-items:center;gap:8px">
-      <span style="font-size:18px;width:26px;text-align:center;flex-shrink:0">${icon}</span>
+  const val = value ? fmtTime(value) : "";
+  const uid = "ms_" + field;
+  const clearBtn = value ? `<button onclick="modalClearField('${field}')" style="background:transparent;color:#666;border:1px solid #444;border-radius:8px;padding:8px 12px;font-size:14px;cursor:pointer;font-family:inherit;flex-shrink:0">✕</button>` : "";
+  const jetzt = showJetzt ? `<button onclick="modalStampNow('${field}')" style="background:#e8333a;color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0">Jetzt</button>` : "";
+  return `<div style="padding:12px 0;border-bottom:1px solid #2e2e2e;cursor:pointer" onclick="document.getElementById('${uid}').click()">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:20px;width:28px;text-align:center;flex-shrink:0">${icon}</span>
       <div style="flex:1">
         <div style="font-size:11px;color:#777;margin-bottom:6px">${label}</div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <select style="${selStyle}" onchange="modalSetHM('${field}',this.value,null)">
-            ${hOpts}
-          </select>
-          <span style="font-size:22px;font-weight:700;color:#888">:</span>
-          <select style="${selStyle}" onchange="modalSetHM('${field}',null,this.value)">
-            ${mOpts}
-          </select>
-        </div>
+        <input
+          id="${uid}"
+          type="time"
+          value="${val}"
+          style="width:100%;background:#1a1a1a;border:1px solid #444;border-radius:10px;color:#f0ece4;font-size:28px;font-weight:700;padding:8px 12px;outline:none;font-family:inherit;-webkit-appearance:none"
+          onchange="modalSaveTime('${field}',this.value)"
+          oninput="modalSaveTime('${field}',this.value)"
+          onclick="event.stopPropagation()">
       </div>
-      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+      <div style="display:flex;gap:6px;flex-shrink:0" onclick="event.stopPropagation()">
         ${clearBtn}
         ${jetzt}
       </div>
@@ -875,41 +897,64 @@ function modalSelectField(label, field, icon, dk, value, showJetzt) {
   </div>`;
 }
 
-function modalSetHM(field, hVal, mVal) {
+function modalSaveTime(field, val) {
   if (!log[modalDk]) log[modalDk] = {};
-  const existing = log[modalDk][field] ? new Date(log[modalDk][field]) : new Date(modalDk + "T12:00:00");
-  const curH = log[modalDk][field] ? new Date(log[modalDk][field]).getHours() : -1;
-  const curM = log[modalDk][field] ? new Date(log[modalDk][field]).getMinutes() : -1;
-  const newH = hVal !== null && hVal !== "" ? parseInt(hVal) : curH;
-  const newM = mVal !== null && mVal !== "" ? parseInt(mVal) : (curM >= 0 ? curM : 0);
-  if (newH >= 0) {
+  if (val) {
     const base = new Date(modalDk + "T12:00:00");
-    base.setHours(newH, newM, 0, 0);
+    const [h, m] = val.split(":").map(Number);
+    base.setHours(h, m, 0, 0);
     log[modalDk][field] = base.toISOString();
-    saveLog();
-    // Update summary only
-    const net = calcNet(log[modalDk]);
-    const box = document.getElementById("dayModalBox");
-    if (box) {
-      const summaryDiv = box.querySelector('.modal-summary');
-      if (summaryDiv) {
-        summaryDiv.style.display = net ? 'flex' : 'none';
-        if (net) summaryDiv.querySelector('.modal-net').textContent = durLabel(net);
-      }
-    }
+  } else {
+    log[modalDk][field] = null;
+  }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(log)); } catch {}
+  scheduleSyncAfterChange();
+  // Update summary without re-render
+  const net = calcNet(log[modalDk]);
+  const el = document.getElementById("modalNetSummary");
+  if (el) {
+    el.style.display = net ? "flex" : "none";
+    const v = document.getElementById("modalNetVal");
+    if (v && net) v.textContent = durLabel(net);
   }
 }
 
 function modalClearField(field) {
   if (!log[modalDk]) return;
   log[modalDk][field] = null;
-  saveLog(); renderDayModal();
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(log)); } catch {}
+  scheduleSyncAfterChange();
+  // Clear the input directly
+  const uid = "ms_" + field;
+  const inp = document.getElementById(uid);
+  if (inp) inp.value = "";
+  // Hide clear button
+  const row = inp ? inp.closest('[style*="padding:12px"]') : null;
+  // Update summary
+  const net = calcNet(log[modalDk]);
+  const el = document.getElementById("modalNetSummary");
+  if (el) { el.style.display = net ? "flex" : "none"; }
+  const v = document.getElementById("modalNetVal");
+  if (v && net) v.textContent = durLabel(net);
+  // Re-render only this field's clear button area - full re-render for simplicity here
+  renderDayModal();
 }
 
 function modalStampNow(field) {
   if (!log[modalDk]) log[modalDk] = {};
   log[modalDk][field] = new Date().toISOString();
-  saveLog(); renderDayModal();
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(log)); } catch {}
+  scheduleSyncAfterChange();
+  // Update input directly
+  const uid = "ms_" + field;
+  const inp = document.getElementById(uid);
+  if (inp) inp.value = fmtTime(log[modalDk][field]);
+  // Update summary
+  const net = calcNet(log[modalDk]);
+  const el = document.getElementById("modalNetSummary");
+  if (el) { el.style.display = net ? "flex" : "none"; }
+  const v = document.getElementById("modalNetVal");
+  if (v && net) v.textContent = durLabel(net);
 }
 
 function modalToggleType(type) {
@@ -945,7 +990,7 @@ function checkInstallHint() {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // GITHUB AUTO-SYNC
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-const GH_TOKEN = "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";
+const GH_TOKEN = "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";
 const GH_USER = "Malva-12";
 const GH_REPO = "Pizza-Blitz";
 const GH_FILE = "data.json";
